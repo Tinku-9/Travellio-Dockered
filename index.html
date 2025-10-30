@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini AI Travel Planner</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom Styles */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f7;
+            min-height: 100vh;
+        }
+        .container-wrapper {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+        @media (min-width: 1024px) {
+            .container-wrapper {
+                grid-template-columns: 1fr 3fr;
+            }
+        }
+        .card {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
+        }
+        /* Custom scrollbar for history panel */
+        #history-panel {
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        #history-panel::-webkit-scrollbar {
+            width: 8px;
+        }
+        #history-panel::-webkit-scrollbar-thumb {
+            background-color: #9ca3af;
+            border-radius: 10px;
+        }
+        #results-area h2 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+            color: #1f2937;
+        }
+        #results-area h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+            color: #374151;
+        }
+        #results-area p {
+            margin-bottom: 0.5rem;
+            line-height: 1.6;
+        }
+        .history-item:hover {
+            background-color: #f3f4f6;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 p-4 md:p-8">
+
+    <!-- Load jsPDF library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <header class="mb-8">
+        <h1 class="text-4xl font-extrabold text-indigo-700 text-center">AI Travel Planner</h1>
+        <p class="text-center text-gray-500 mt-2">Generate a custom itinerary and save your history in the browser using LocalStorage.</p>
+    </header>
+
+    <div class="max-w-7xl mx-auto container-wrapper">
+        
+        <!-- Left Panel: Form and History -->
+        <div class="space-y-6">
+            
+            <!-- Input Form Card -->
+            <div class="card">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">Plan Your Trip</h2>
+                <form id="travel-form" class="space-y-4">
+                    
+                    <!-- Traveler Details -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="traveler_name" class="block text-sm font-medium text-gray-700">Name</label>
+                            <input type="text" id="traveler_name" value="Alex Johnson" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border">
+                        </div>
+                        <div>
+                            <label for="age" class="block text-sm font-medium text-gray-700">Age</label>
+                            <input type="number" id="age" value="30" min="1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border">
+                        </div>
+                    </div>
+
+                    <!-- Destination & Dates -->
+                    <div>
+                        <label for="destination" class="block text-sm font-medium text-gray-700">Destination <span class="text-red-500">*</span></label>
+                        <input type="text" id="destination" placeholder="e.g., Kyoto, Japan or Amalfi Coast" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border">
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="start_date" class="block text-sm font-medium text-gray-700">Start Date <span class="text-red-500">*</span></label>
+                            <input type="date" id="start_date" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border">
+                        </div>
+                        <div>
+                            <label for="end_date" class="block text-sm font-medium text-gray-700">End Date <span class="text-red-500">*</span></label>
+                            <input type="date" id="end_date" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border">
+                        </div>
+                    </div>
+
+                    <!-- Budget & People -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="budget" class="block text-sm font-medium text-gray-700">Budget (Total) <span class="text-red-500">*</span></label>
+                            <input type="text" id="budget" placeholder="e.g., $3000 (mid-range)" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border">
+                        </div>
+                        <div>
+                            <label for="num_people" class="block text-sm font-medium text-gray-700">Number of People</label>
+                            <input type="number" id="num_people" value="2" min="1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border">
+                        </div>
+                    </div>
+                    
+                    <!-- Travel Type -->
+                    <div>
+                        <label for="travel_type" class="block text-sm font-medium text-gray-700">Travel Type</label>
+                        <select id="travel_type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border bg-white">
+                            <option value="friends">Friends / Solo</option>
+                            <option value="family">Family (with kids)</option>
+                            <option value="romantic">Couple / Romantic</option>
+                            <option value="business">Business</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out disabled:opacity-50">
+                        Generate Travel Plan
+                    </button>
+                    
+                    <!-- Loading Indicator -->
+                    <div id="loading-indicator" class="hidden text-center mt-4">
+                        <div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+                        <p class="text-sm text-indigo-600 mt-2">Crafting your perfect itinerary...</p>
+                    </div>
+
+                </form>
+            </div>
+            
+            <!-- History Card -->
+            <div class="card">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">Previous Plans (Browser History)</h2>
+                <div id="history-panel">
+                    <div id="history-content" class="divide-y divide-gray-200">
+                        <!-- History items will be rendered here -->
+                        <p class="text-center text-gray-500 mt-4">Loading history...</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Panel: Results and Actions -->
+        <div class="card">
+            <div class="flex justify-between items-center border-b pb-2 mb-4">
+                <h2 class="text-xl font-semibold text-gray-800">Generated Itinerary</h2>
+                <button id="download-pdf-btn" class="hidden bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out text-sm flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download as PDF
+                </button>
+            </div>
+            
+            <div id="message-box" class="opacity-0 transition-opacity duration-300"></div>
+
+            <div id="results-area" class="min-h-[300px] text-gray-700">
+                <div id="plan-container" class="space-y-4">
+                    <p class="text-gray-500">The generated travel plan will appear here. Start by filling out the form!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Custom Confirmation Modal -->
+    <div id="custom-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <h3 id="modal-title" class="text-lg leading-6 font-medium text-gray-900"></h3>
+                <div class="mt-2 px-7 py-3">
+                    <p id="modal-message" class="text-sm text-gray-500"></p>
+                </div>
+                <div class="items-center px-4 py-3">
+                    <button id="modal-cancel-btn" class="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md w-24 shadow-sm hover:bg-gray-300 transition duration-150 ease-in-out">
+                        Cancel
+                    </button>
+                    <button id="modal-confirm-btn" class="ml-2 px-4 py-2 bg-red-500 text-white text-base font-medium rounded-md w-24 shadow-sm hover:bg-red-600 transition duration-150 ease-in-out">
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // --- GLOBAL VARIABLES & CONFIG ---
+        const apiKey = "AIzaSyAWP686tqv6dRWrWoEY7zpZsstklQ0lFTc"; // Canvas provides this automatically if left empty
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+        const STORAGE_KEY = 'ai_travel_plans';
+
+        // UI Elements
+        const form = document.getElementById('travel-form');
+        const resultsArea = document.getElementById('results-area');
+        const historyPanel = document.getElementById('history-content');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const messageBox = document.getElementById('message-box');
+        const downloadButton = document.getElementById('download-pdf-btn');
+        const planContainer = document.getElementById('plan-container');
+
+        // State
+        let currentPlanText = "";
+        let currentPlanInputs = {};
+        let plans = [];
+
+        // --- LOCAL STORAGE FUNCTIONS ---
+
+        function getPlansFromLocalStorage() {
+            try {
+                const storedPlans = localStorage.getItem(STORAGE_KEY);
+                return storedPlans ? JSON.parse(storedPlans) : [];
+            } catch (e) {
+                console.error("Error reading from localStorage:", e);
+                return [];
+            }
+        }
+
+        function savePlansToLocalStorage() {
+            try {
+                // Ensure plans are sorted before saving to maintain history order on load
+                plans.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(plans));
+            } catch (e) {
+                console.error("Error writing to localStorage:", e);
+            }
+        }
+
+        function loadPlansFromLocalStorage() {
+            plans = getPlansFromLocalStorage();
+            renderHistory();
+        }
+
+        async function savePlan(inputs, planText) {
+            // Generate a simple unique ID and timestamp
+            const newPlan = {
+                id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
+                inputs: inputs,
+                planText: planText,
+                timestamp: Date.now(),
+            };
+            
+            plans.unshift(newPlan); // Add to the beginning
+            savePlansToLocalStorage();
+            renderHistory();
+            showMessage("Plan saved to history (in browser memory)!", 'success');
+        }
+
+        function deletePlan(planId) {
+            // Use custom modal for confirmation
+            showModal("Confirm Deletion", "Are you sure you want to delete this travel plan from your browser's history?", () => {
+                plans = plans.filter(p => p.id !== planId);
+                savePlansToLocalStorage();
+                renderHistory();
+                showMessage("Plan deleted successfully.", 'success');
+            });
+        }
+        
+        // --- UI RENDERING & UTILITIES ---
+        
+        function showLoading(show) {
+            loadingIndicator.classList.toggle('hidden', !show);
+            form.querySelector('button[type="submit"]').disabled = show;
+        }
+
+        function showMessage(text, type = 'info') {
+            messageBox.textContent = text;
+            messageBox.className = `p-3 mt-4 rounded-lg text-sm transition-opacity duration-300 ${type === 'error' ? 'bg-red-100 text-red-800' : type === 'success' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`;
+            messageBox.classList.remove('opacity-0');
+            setTimeout(() => {
+                messageBox.classList.add('opacity-0');
+            }, 5000);
+        }
+
+        // Simple Markdown to HTML conversion for display
+        function markdownToHtml(markdown) {
+            let html = markdown || '';
+            
+            // Convert **bold** and *italic*
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+            
+            // Handle lists (simple dashes)
+            html = html.replace(/^- (.*)$/gm, '<li>$1</li>');
+            html = html.replace(/<li>.*<\/li>/s, '<ul>$&</ul>');
+
+            // Handle headings (H2 and H3) - assumes model uses ## and ###
+            html = html.replace(/^## (.*)$/gm, '<h2>$1</h2>');
+            html = html.replace(/^### (.*)$/gm, '<h3>$1</h3>');
+            
+            // Convert remaining newlines to paragraphs/breaks
+            html = html.split('\n').map(line => {
+                if (line.trim() === '' || line.startsWith('<h') || line.startsWith('<ul') || line.startsWith('<li') || line.startsWith('</ul') || line.startsWith('</li')) {
+                    return line;
+                }
+                return `<p>${line}</p>`;
+            }).join('');
+
+            return html;
+        }
+
+        function renderPlan(planText, inputs) {
+            if (!planText) {
+                planContainer.innerHTML = '<p class="text-gray-500">The generated travel plan will appear here. Start by filling out the form!</p>';
+                downloadButton.classList.add('hidden');
+                currentPlanText = "";
+                currentPlanInputs = {};
+                return;
+            }
+
+            const htmlContent = markdownToHtml(planText);
+            planContainer.innerHTML = htmlContent;
+            downloadButton.classList.remove('hidden');
+            currentPlanText = planText; // Store the original Markdown for PDF conversion
+            currentPlanInputs = inputs;
+        }
+
+        function renderHistory() {
+            historyPanel.innerHTML = '';
+            if (plans.length === 0) {
+                historyPanel.innerHTML = '<p class="text-center text-gray-500 mt-4">No saved plans yet.</p>';
+                return;
+            }
+
+            plans.forEach(plan => {
+                const item = document.createElement('div');
+                item.className = 'history-item p-3 border-b border-gray-100 cursor-pointer flex justify-between items-center transition duration-150 ease-in-out';
+                item.innerHTML = `
+                    <div>
+                        <p class="font-semibold text-gray-800">${plan.inputs.destination}</p>
+                        <p class="text-xs text-gray-500">${new Date(plan.timestamp).toLocaleDateString()}</p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button class="view-plan text-indigo-600 hover:text-indigo-800 text-sm font-medium" data-id="${plan.id}">View</button>
+                        <button class="delete-plan text-red-500 hover:text-red-700 text-sm font-medium" data-id="${plan.id}">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
+                    </div>
+                `;
+                
+                // Add event listeners using delegation or directly
+                item.querySelector('.view-plan').addEventListener('click', () => viewPlan(plan.id));
+                item.querySelector('.delete-plan').addEventListener('click', (e) => {
+                    e.stopPropagation(); // Prevent view action if clicking delete button
+                    deletePlan(plan.id);
+                });
+
+                historyPanel.appendChild(item);
+            });
+        }
+
+        function viewPlan(planId) {
+            const plan = plans.find(p => p.id === planId);
+            if (plan) {
+                renderPlan(plan.planText, plan.inputs);
+                showMessage(`Viewing plan for ${plan.inputs.destination} from history.`, 'info');
+            } else {
+                showMessage("Plan not found in history.", 'error');
+            }
+        }
+
+        // Custom Modal UI for confirmation
+        function showModal(title, message, onConfirm) {
+            const modal = document.getElementById('custom-modal');
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-message').textContent = message;
+            
+            document.getElementById('modal-confirm-btn').onclick = () => {
+                onConfirm();
+                modal.classList.add('hidden');
+            };
+            
+            document.getElementById('modal-cancel-btn').onclick = () => {
+                modal.classList.add('hidden');
+            };
+            
+            modal.classList.remove('hidden');
+        }
+
+        // --- GEMINI API INTEGRATION ---
+        
+        async function fetchWithBackoff(url, options, maxRetries = 5) {
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) {
+                        throw new Error(`API response error: ${response.statusText}`);
+                    }
+                    return response;
+                } catch (error) {
+                    console.error(`Attempt ${i + 1} failed:`, error.message);
+                    if (i === maxRetries - 1) throw error; 
+                    const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+        
+        async function generatePlan(inputs) {
+            showLoading(true);
+            
+            const prompt = `
+                I am planning a trip and need a detailed, multi-day itinerary.
+                
+                **Traveler Profile:**
+                - Name: ${inputs.name} (Age: ${inputs.age})
+                - Travel companions: ${inputs.people} people (${inputs.type})
+                
+                **Trip Details:**
+                - Destination: ${inputs.destination}
+                - Start Date: ${inputs.start_date}
+                - End Date: ${inputs.end_date}
+                - Budget: ${inputs.budget}
+                
+                Please generate a travel plan that is engaging, realistic, and tailored to the budget and travel type. The plan should include a suggested itinerary with daily activities, estimated costs for the day (e.g., accommodation, food, activities, transportation), and a brief recommendation for accommodation and travel within the destination.
+                
+                **Format your entire response using Markdown:**
+                - Start with a single main heading (H1) for the trip title.
+                - Use H2 for major sections (e.g., "Overview," "Daily Itinerary").
+                - Use H3 for each day (e.g., "Day 1: Arrival and City Tour").
+                - Use clear lists for daily activities and cost breakdowns.
+            `;
+
+            const systemPrompt = "You are a world-class travel agent specializing in creating detailed, personalized, and budget-conscious travel itineraries. Respond only with the comprehensive travel plan in the requested Markdown format. Do not include any conversational preamble or conclusion.";
+
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                tools: [{ "google_search": {} }], // Enable grounding for accurate destination data
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+            };
+
+            try {
+                const response = await fetchWithBackoff(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const result = await response.json();
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (text) {
+                    renderPlan(text, inputs);
+                    await savePlan(inputs, text);
+                    showMessage("Travel plan generated successfully!", 'success');
+                } else {
+                    console.error("Gemini API returned no text:", result);
+                    renderPlan(null, {});
+                    showMessage("Sorry, the AI could not generate a plan. Please try different inputs.", 'error');
+                }
+
+            } catch (error) {
+                console.error("API Call failed:", error);
+                renderPlan(null, {});
+                showMessage(`Request failed due to a network or server error: ${error.message}.`, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        // --- PDF GENERATION ---
+
+        async function downloadPdf() {
+            if (!currentPlanText) {
+                showMessage("Generate a plan first before downloading.", 'info');
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            showMessage("Preparing PDF download...", 'info');
+
+            const title = currentPlanInputs.destination || "Travel Plan";
+            const lines = currentPlanText.split('\n');
+            
+            let y = 10;
+            const margin = 10;
+            const pageWidth = doc.internal.pageSize.width;
+
+            doc.setFontSize(22);
+            doc.text(`AI Generated Travel Plan: ${title}`, margin, y);
+            y += 10;
+            doc.line(margin, y, pageWidth - margin, y);
+            y += 5;
+
+            doc.setFontSize(10);
+            doc.text(`Generated for ${currentPlanInputs.name} | Budget: ${currentPlanInputs.budget}`, margin, y);
+            y += 10;
+
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'normal');
+
+            lines.forEach(line => {
+                if (line.trim() === '') return;
+
+                let fontSize = 12;
+                let fontStyle = 'normal';
+                let textColor = '#000000'; 
+
+                if (line.startsWith('# ')) { // H1/Title from markdown
+                    fontSize = 20;
+                    fontStyle = 'bold';
+                    textColor = '#4f46e5';
+                    line = line.substring(2).trim();
+                } else if (line.startsWith('## ')) {
+                    fontSize = 16;
+                    fontStyle = 'bold';
+                    line = line.substring(3).trim();
+                } else if (line.startsWith('### ')) {
+                    fontSize = 14;
+                    fontStyle = 'bold';
+                    textColor = '#374151'; 
+                    line = line.substring(4).trim();
+                } else if (line.startsWith('- ')) {
+                    // List item processing
+                    line = '  • ' + line.substring(2).trim(); 
+                    fontSize = 10;
+                } else if (line.includes('**')) {
+                    // Simple bold handling for PDF
+                    line = line.replace(/\*\*(.*?)\*\*/g, ' $1 '); // Just remove the asterisks
+                    fontSize = 10;
+                }
+
+                doc.setFontSize(fontSize);
+                doc.setTextColor(textColor);
+                doc.setFont('helvetica', fontStyle);
+                
+                // Split text into lines that fit the page width
+                const textLines = doc.splitTextToSize(line, pageWidth - 2 * margin);
+                
+                textLines.forEach(textLine => {
+                    if (y > doc.internal.pageSize.height - 20) {
+                        doc.addPage();
+                        y = 10;
+                    }
+                    doc.text(textLine, margin, y);
+                    y += 7; // Line spacing
+                });
+                
+                y += (fontSize > 12 ? 3 : 1); // Extra space after headings
+            });
+
+            doc.save(`Travel_Plan_${title.replace(/\s/g, '_')}.pdf`);
+            showMessage("PDF download started!", 'success');
+        }
+
+
+        // --- EVENT HANDLERS ---
+        
+        function handleFormSubmit(event) {
+            event.preventDefault();
+            
+            const inputs = {
+                name: document.getElementById('traveler_name').value.trim(),
+                age: document.getElementById('age').value,
+                destination: document.getElementById('destination').value.trim(),
+                start_date: document.getElementById('start_date').value,
+                end_date: document.getElementById('end_date').value,
+                budget: document.getElementById('budget').value.trim(),
+                people: document.getElementById('num_people').value,
+                type: document.getElementById('travel_type').value,
+            };
+            
+            // Basic validation
+            if (!inputs.destination || !inputs.budget || !inputs.start_date || !inputs.end_date) {
+                showMessage("Please fill out the Destination, Dates, and Budget fields.", 'error');
+                return;
+            }
+
+            if (new Date(inputs.start_date) > new Date(inputs.end_date)) {
+                showMessage("Start Date cannot be after End Date.", 'error');
+                return;
+            }
+
+            generatePlan(inputs);
+        }
+
+        // --- GLOBAL SETUP ---
+
+        window.onload = function() {
+            loadPlansFromLocalStorage();
+            form.addEventListener('submit', handleFormSubmit);
+            downloadButton.addEventListener('click', downloadPdf);
+            
+            // Initial render of empty state
+            if (plans.length === 0) {
+                renderPlan(null, {});
+            } else {
+                // Load the most recent plan on startup
+                viewPlan(plans[0].id);
+            }
+        };
+    </script>
+</body>
+</html>
